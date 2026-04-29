@@ -368,15 +368,42 @@ class MainWindow(QMainWindow):
         return group
     
     def create_chart_section(self) -> QGroupBox:
-        """Create the matplotlib chart section."""
-        group = QGroupBox("График параметров")
+        """Create the matplotlib chart section with separate charts for each parameter."""
+        group = QGroupBox("Графики параметров")
         layout = QVBoxLayout()
         
-        # Create matplotlib canvas
-        self.canvas = MplCanvas(self, width=8, height=5, dpi=80)
-        layout.addWidget(self.canvas)
+        # Create a scroll area for multiple charts
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         
-        # Initial plot
+        # Container widget for charts
+        charts_container = QWidget()
+        charts_layout = QVBoxLayout()
+        charts_layout.setSpacing(15)
+        
+        # Define parameters and their colors (unified color scheme)
+        self.param_configs = {
+            'temp': {'label': 'Температура', 'unit': '°C', 'color': '#E74C3C'},
+            'ph': {'label': 'pH', 'unit': '', 'color': '#3498DB'},
+            'o2': {'label': 'Кислород (O₂)', 'unit': '%', 'color': '#2ECC71'},
+            'ammonia': {'label': 'Аммиак (NH₃)', 'unit': 'мг/л', 'color': '#F39C12'},
+            'nitrite': {'label': 'Нитриты (NO₂)', 'unit': 'мг/л', 'color': '#9B59B6'},
+            'salinity': {'label': 'Солёность', 'unit': '‰', 'color': '#1ABC9C'},
+        }
+        
+        # Create separate canvas for each parameter
+        self.param_canvases = {}
+        for param, config in self.param_configs.items():
+            canvas = MplCanvas(self, width=6, height=2, dpi=80)
+            self.param_canvases[param] = canvas
+            charts_layout.addWidget(canvas)
+        
+        charts_container.setLayout(charts_layout)
+        scroll_area.setWidget(charts_container)
+        layout.addWidget(scroll_area)
+        
+        # Initial plots
         self.plot_data()
         
         group.setLayout(layout)
@@ -420,6 +447,7 @@ class MainWindow(QMainWindow):
         """Create the history data table."""
         group = QGroupBox("История замеров")
         layout = QVBoxLayout()
+        layout.setContentsMargins(10, 10, 10, 10)
         
         self.history_table = QTableWidget()
         self.history_table.setColumnCount(10)
@@ -427,16 +455,29 @@ class MainWindow(QMainWindow):
             "ID", "Время", "Temp", "pH", "O₂", "NH₃", "NO₂", "Sal", "Состояние", "Прогноз"
         ])
         
-        # Configure table
+        # Configure table - increased size
         header = self.history_table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.history_table.setAlternatingRowColors(True)
+        self.history_table.setMinimumHeight(250)  # Increased minimum height
         self.history_table.setStyleSheet("""
             QTableWidget {
-                gridline-color: #dddddd;
+                background-color: #2A2A35;
+                alternate-background-color: #32323D;
+                color: #E0E0E0;
+                gridline-color: #3A3A45;
+                border: 1px solid #3A3A45;
+                border-radius: 8px;
             }
             QTableWidget::item {
-                padding: 5px;
+                padding: 8px;
+            }
+            QHeaderView::section {
+                background-color: #3A3A45;
+                color: #E0E0E0;
+                padding: 10px;
+                border: none;
+                font-weight: bold;
             }
         """)
         
@@ -567,59 +608,73 @@ class MainWindow(QMainWindow):
             self.card_confidence.update_value(conf_text, conf_color)
     
     def plot_data(self) -> None:
-        """Plot measurement data on the chart."""
-        self.canvas.axes.clear()
-        
+        """Plot measurement data on separate charts for each parameter."""
         if not self.measurements_history:
-            self.canvas.axes.text(0.5, 0.5, "Нет данных для отображения", 
-                                 transform=self.canvas.axes.transAxes,
-                                 ha='center', va='center', fontsize=14)
-            self.canvas.draw()
+            # Clear all canvases and show "no data" message
+            for param, canvas in self.param_canvases.items():
+                canvas.axes.clear()
+                canvas.axes.text(0.5, 0.5, "Нет данных", 
+                                 transform=canvas.axes.transAxes,
+                                 ha='center', va='center', fontsize=12, color='#888888')
+                canvas.axes.set_facecolor('#1E1E24')
+                canvas.draw()
             return
         
-        # Prepare data for plotting
-        timestamps = []
-        params = {
+        # Prepare data for plotting (last 50 measurements)
+        params_data = {
             'temp': [], 'ph': [], 'o2': [],
             'ammonia': [], 'nitrite': [], 'salinity': []
         }
         
-        for m in self.measurements_history[-50:]:  # Last 50 measurements
-            timestamps.append(m.get('timestamp', '')[:16])  # Short timestamp
-            params['temp'].append(m.get('temp', 0))
-            params['ph'].append(m.get('ph', 0))
-            params['o2'].append(m.get('o2', 0))
-            params['ammonia'].append(m.get('ammonia', 0))
-            params['nitrite'].append(m.get('nitrite', 0))
-            params['salinity'].append(m.get('salinity', 0))
+        for m in self.measurements_history[-50:]:
+            params_data['temp'].append(m.get('temp', 0))
+            params_data['ph'].append(m.get('ph', 0))
+            params_data['o2'].append(m.get('o2', 0))
+            params_data['ammonia'].append(m.get('ammonia', 0))
+            params_data['nitrite'].append(m.get('nitrite', 0))
+            params_data['salinity'].append(m.get('salinity', 0))
         
-        # Plot each parameter
-        colors = {
-            'temp': 'red', 'ph': 'blue', 'o2': 'green',
-            'ammonia': 'orange', 'nitrite': 'purple', 'salinity': 'brown'
-        }
-        
-        for param, values in params.items():
-            self.canvas.axes.plot(
+        # Plot each parameter on its own chart with unified colors
+        for param, values in params_data.items():
+            config = self.param_configs[param]
+            canvas = self.param_canvases[param]
+            canvas.axes.clear()
+            
+            # Plot the line with unified color scheme
+            canvas.axes.plot(
                 range(len(values)), values,
-                label=f"{param}",
-                color=colors[param],
-                linewidth=1.5,
+                color=config['color'],
+                linewidth=2,
                 marker='o',
-                markersize=3
+                markersize=4,
+                markerfacecolor=config['color'],
+                markeredgecolor='#1E1E24',
+                markeredgewidth=1
             )
-        
-        # Formatting
-        self.canvas.axes.set_xlabel("Замеры")
-        self.canvas.axes.set_ylabel("Значение")
-        self.canvas.axes.set_title("Динамика параметров водной среды")
-        self.canvas.axes.legend(loc='upper left', bbox_to_anchor=(1, 1))
-        self.canvas.axes.grid(True, alpha=0.3)
-        
-        # Rotate x-axis labels
-        self.canvas.fig.autofmt_xdate()
-        
-        self.canvas.draw()
+            
+            # Fill area under the line
+            canvas.axes.fill_between(
+                range(len(values)), values, 
+                alpha=0.3, color=config['color']
+            )
+            
+            # Styling with unified dark theme
+            canvas.axes.set_title(f"{config['label']}", fontsize=11, weight='bold', color='#E0E0E0')
+            canvas.axes.set_ylabel(config['unit'], fontsize=9, color='#AAAAAA')
+            canvas.axes.grid(True, alpha=0.2, linestyle='--', color='#3A3A45')
+            
+            # Set background colors to match theme
+            canvas.axes.set_facecolor('#2A2A35')
+            canvas.fig.patch.set_facecolor('#2A2A35')
+            
+            # Style tick labels
+            canvas.axes.tick_params(colors='#AAAAAA', labelsize=9)
+            
+            # Set spine colors
+            for spine in canvas.axes.spines.values():
+                spine.set_color('#3A3A45')
+            
+            canvas.draw()
     
     def refresh_chart(self) -> None:
         """Refresh the chart with latest data."""
