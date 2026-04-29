@@ -1,8 +1,7 @@
-# [FILE: ras_monitor/requirements.txt]
-PyQt6==6.6.1
-torch==2.2.0
-scikit-learn==1.4.0
-matplotlib==3.8.0
-numpy==1.26.0
-pandas==2.2.0
-pyinstaller==6.3.0
+PyQt6
+torch
+scikit-learn
+matplotlib
+numpy
+pandas
+pyinstaller
