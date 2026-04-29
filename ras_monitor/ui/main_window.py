@@ -31,7 +31,7 @@ from ml.predictor import Predictor
 class StatusCard(QFrame):
     """Styled card widget for displaying status information."""
     
-    def __init__(self, title: str, value: str = "", color: str = "#ffffff"):
+    def __init__(self, title: str, value: str = "", color: str = "#2A2A35"):
         super().__init__()
         self.title = title
         self.value = value
@@ -46,8 +46,12 @@ class StatusCard(QFrame):
             QFrame {{
                 background-color: {self.color};
                 border-radius: 8px;
-                border: 1px solid #cccccc;
-                padding: 10px;
+                border: 1px solid #3A3A45;
+                padding: 12px;
+                color: #E0E0E0;
+            }}
+            QFrame:hover {{
+                border: 1px solid #5A5A65;
             }}
         """)
         
@@ -58,6 +62,7 @@ class StatusCard(QFrame):
         self.title_label = QLabel(self.title)
         self.title_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
         self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.title_label.setStyleSheet("color: #AAAAAA;")
         layout.addWidget(self.title_label)
         
         # Value label
@@ -65,6 +70,7 @@ class StatusCard(QFrame):
         self.value_label.setFont(QFont("Arial", 14))
         self.value_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.value_label.setWordWrap(True)
+        self.value_label.setStyleSheet("color: #E0E0E0;")
         layout.addWidget(self.value_label)
         
         self.setLayout(layout)
@@ -79,8 +85,12 @@ class StatusCard(QFrame):
                 QFrame {{
                     background-color: {color};
                     border-radius: 8px;
-                    border: 1px solid #cccccc;
-                    padding: 10px;
+                    border: 1px solid #3A3A45;
+                    padding: 12px;
+                    color: #FFFFFF;
+                }}
+                QFrame:hover {{
+                    border: 1px solid #5A5A65;
                 }}
             """)
 
@@ -110,24 +120,24 @@ class MainWindow(QMainWindow):
     - Bottom: History table
     """
     
-    # Color mapping for states
+    # Color mapping for states - semantic colors as per requirements
     STATE_COLORS = {
-        0: "#90EE90",  # Light green - normal
-        1: "#FFFF99",  # Light yellow - deviation
-        2: "#FFD700",  # Gold - unstable
-        3: "#FFA500",  # Orange - threat
-        4: "#FF6347",  # Tomato - critical
+        0: "#2A2A35",  # Dark gray - normal (default card color)
+        1: "#4CAF50",  # Green - отходящее от нормы
+        2: "#FFC107",  # Yellow - неустойчивое
+        3: "#FF9800",  # Orange - угроза
+        4: "#F44336",  # Red - критическое
     }
     
     DYNAMICS_COLORS = {
-        "Стабильно": "#90EE90",
-        "Улучшение": "#87CEEB",
-        "Ухудшение": "#FFB6C1",
+        "Стабильно": "#4CAF50",
+        "Улучшение": "#2196F3",
+        "Ухудшение": "#F44336",
     }
     
     SUITABILITY_COLORS = {
-        "пригодна": "#90EE90",
-        "непригодна": "#FF6347",
+        "пригодна": "#4CAF50",
+        "непригодна": "#F44336",
     }
     
     def __init__(self):
@@ -148,6 +158,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("RAS Monitor - Система мониторинга водной среды УЗВ")
         self.setGeometry(100, 100, 1400, 900)
         
+        self.create_menu_bar()
         self.setup_ui()
         self.load_history()
         
@@ -156,11 +167,124 @@ class MainWindow(QMainWindow):
         self.refresh_timer.timeout.connect(self.refresh_chart)
         # self.refresh_timer.start(30000)  # Refresh every 30 seconds
     
+    def create_menu_bar(self):
+        """Create menu bar with additional features."""
+        menubar = self.menuBar()
+        menubar.setStyleSheet("""
+            QMenuBar {
+                background-color: #2A2A35;
+                color: #E0E0E0;
+                border-bottom: 1px solid #3A3A45;
+            }
+            QMenuBar::item:selected {
+                background-color: #3A3A45;
+            }
+            QMenu {
+                background-color: #2A2A35;
+                color: #E0E0E0;
+                border: 1px solid #3A3A45;
+            }
+            QMenu::item:selected {
+                background-color: #3A3A45;
+            }
+        """)
+        
+        # Tools menu
+        tools_menu = menubar.addMenu("Инструменты")
+        
+        # KB Editor action
+        kb_action = tools_menu.addAction("Редактор БЗ")
+        kb_action.setShortcut("Ctrl+K")
+        kb_action.triggered.connect(self.open_kb_editor)
+        
+        # Report export action
+        report_action = tools_menu.addAction("Экспорт отчёта")
+        report_action.setShortcut("Ctrl+E")
+        report_action.triggered.connect(self.open_report_dialog)
+        
+        # Separator
+        tools_menu.addSeparator()
+        
+        # Mock data generator action
+        mock_action = tools_menu.addAction("Генератор тестовых данных")
+        mock_action.triggered.connect(self.generate_mock_data)
+    
     def setup_ui(self) -> None:
         """Set up the main user interface."""
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         
+        # Apply main window dark theme stylesheet
+        central_widget.setStyleSheet("""
+            QMainWindow {
+                background-color: #1E1E24;
+            }
+            QWidget {
+                background-color: #1E1E24;
+                color: #E0E0E0;
+            }
+            QGroupBox {
+                background-color: #2A2A35;
+                border: 1px solid #3A3A45;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 10px;
+                font-weight: bold;
+                color: #E0E0E0;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px;
+                color: #AAAAAA;
+            }
+            QTableWidget {
+                background-color: #2A2A35;
+                alternate-background-color: #32323D;
+                color: #E0E0E0;
+                gridline-color: #3A3A45;
+                border: 1px solid #3A3A45;
+                border-radius: 8px;
+            }
+            QTableWidget::item {
+                padding: 8px;
+            }
+            QHeaderView::section {
+                background-color: #3A3A45;
+                color: #E0E0E0;
+                padding: 8px;
+                border: none;
+                font-weight: bold;
+            }
+            QLineEdit {
+                background-color: #3A3A45;
+                border: 1px solid #4A4A55;
+                border-radius: 4px;
+                padding: 6px;
+                color: #E0E0E0;
+            }
+            QLineEdit:focus {
+                border: 1px solid #5A5A65;
+            }
+            QLabel {
+                color: #E0E0E0;
+            }
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                padding: 10px 20px;
+                border-radius: 6px;
+                border: none;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+            QPushButton:pressed {
+                background-color: #3d8b40;
+            }
+        """)
+
         main_layout = QVBoxLayout()
         main_layout.setSpacing(10)
         main_layout.setContentsMargins(10, 10, 10, 10)
@@ -542,3 +666,50 @@ class MainWindow(QMainWindow):
         """Handle window close event."""
         self.db.close()
         event.accept()
+    
+    def open_kb_editor(self):
+        """Open Knowledge Base Editor window."""
+        from ui.kb_editor import KBEditorWindow
+        self.kb_editor = KBEditorWindow(self.db.db_path, self)
+        self.kb_editor.show()
+    
+    def open_report_dialog(self):
+        """Open Report Export dialog."""
+        from ui.report_dialog import ReportDialog
+        dialog = ReportDialog(self.db.db_path, self)
+        dialog.exec()
+    
+    def generate_mock_data(self):
+        """Generate mock test data."""
+        from tools.generate_mock_data import MockDataGenerator
+        from datetime import datetime, timedelta
+        
+        reply = QMessageBox.question(
+            self, "Генерация тестовых данных",
+            "Сгенерировать 7 суток тестовых данных?\n\n"
+            "⚠️ Внимание: Все текущие данные будут удалены!",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        
+        try:
+            start_date = datetime.now() - timedelta(days=7)
+            generator = MockDataGenerator(self.db.db_path)
+            count = generator.generate_7_days(start_date)
+            generator.close()
+            
+            # Refresh UI
+            self.load_history()
+            self.refresh_chart()
+            
+            QMessageBox.information(
+                self, "Успех",
+                f"Сгенерировано {count} записей тестовых данных."
+            )
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Ошибка",
+                f"Ошибка генерации данных:\n{e}"
+            )
