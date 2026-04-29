@@ -1,11 +1,5 @@
 ```
-# Database files
-*.db
-
-# Generated reports
-ras_monitor/reports/*.csv
-
-# Environment and cache
+# Python
 __pycache__/
 *.pyc
 *.pyo
@@ -14,27 +8,46 @@ __pycache__/
 env/
 venv/
 .venv/
+.venv.*
 .env
 .env.local
 .env.*
 .ENV
+.python-version
+.python_history
+.pytest_cache/
+.mypy_cache/
+.coverage
+coverage/
 
-# IDE and editor files
+# Build artifacts
+build/
+dist/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *.tmp
 
+# OS
+.DS_Store
+Thumbs.db
+
 # Logs
 *.log
 
-# Coverage reports
-.coverage
-coverage/
-htmlcov/
+# Distribution / packaging
+*.tar.gz
+*.whl
+-pip-delete-this-directory.txt
 
-# OS generated files
-.DS_Store
-Thumbs.db
+# Testing
+.pytest_cache/
+.coverage*
+htmlcov/
 ```

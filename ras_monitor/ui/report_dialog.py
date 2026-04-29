@@ -65,8 +65,8 @@ class ReportDialog(QDialog):
         format_layout = QHBoxLayout()
         
         self.format_combo = QComboBox()
-        self.format_combo.addItems(["CSV"])
-        self.format_combo.setEnabled(False)  # Only CSV for now
+        self.format_combo.addItems(["PDF"])
+        self.format_combo.setEnabled(False)  # Only PDF for now
         format_layout.addWidget(QLabel("Формат:"))
         format_layout.addWidget(self.format_combo)
         format_layout.addStretch()
@@ -78,7 +78,7 @@ class ReportDialog(QDialog):
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(10)
         
-        self.export_btn = QPushButton("📄 Экспорт")
+        self.export_btn = QPushButton("📄 Экспорт в PDF")
         self.export_btn.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;
@@ -136,8 +136,8 @@ class ReportDialog(QDialog):
             return
         
         try:
-            # Export to CSV
-            filepath = self.report_exporter.export_to_csv(start_datetime, end_datetime)
+            # Export to PDF
+            filepath = self.report_exporter.export_to_pdf(start_datetime, end_datetime)
             
             QMessageBox.information(
                 self, "Успех",
