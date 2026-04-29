@@ -1,41 +1,40 @@
-```gitignore
-# Python
+```
+# Database files
+*.db
+
+# Generated reports
+ras_monitor/reports/*.csv
+
+# Environment and cache
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .Python
-python-build/
-
-# Dependencies
-.venv/
-venv/
 env/
+venv/
+.venv/
 .env
 .env.local
-*.env*
+.env.*
+.ENV
 
-# Build artifacts
-build/
-dist/
-*.egg-info/
-.coverage
-htmlcov/
-.coverage.*
-.nox/
-.tox/
-
-# Logs
-*.log
-
-# IDE
+# IDE and editor files
 .vscode/
 .idea/
 *.swp
 *.swo
 *.tmp
 
-# OS
+# Logs
+*.log
+
+# Coverage reports
+.coverage
+coverage/
+htmlcov/
+
+# OS generated files
 .DS_Store
 Thumbs.db
 ```
