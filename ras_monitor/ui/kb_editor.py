@@ -326,19 +326,18 @@ class KBDatabase:
             self.conn.close()
 
 
-class TermsEditorDialog(QDialog):
-    """Dialog for editing KB terms."""
+class TermsEditorDialog(QWidget):
+    """Widget for editing KB terms."""
     
     def __init__(self, kb_db: KBDatabase, parent=None):
         super().__init__(parent)
         self.kb_db = kb_db
-        self.setWindowTitle("Редактирование терминов")
-        self.setGeometry(100, 100, 600, 400)
         self.setup_ui()
         self.load_terms()
     
     def setup_ui(self):
         layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
         
         # Table
         self.table = QTableWidget()
@@ -365,10 +364,6 @@ class TermsEditorDialog(QDialog):
         btn_layout.addWidget(self.delete_btn)
         
         btn_layout.addStretch()
-        
-        self.close_btn = QPushButton("Закрыть")
-        self.close_btn.clicked.connect(self.accept)
-        btn_layout.addWidget(self.close_btn)
         
         layout.addLayout(btn_layout)
         self.setLayout(layout)
@@ -465,19 +460,18 @@ class TermEditDialog(QDialog):
             QMessageBox.warning(self, "Ошибка", str(e))
 
 
-class RangesEditorDialog(QDialog):
-    """Dialog for editing normal ranges."""
+class RangesEditorDialog(QWidget):
+    """Widget for editing normal ranges."""
     
     def __init__(self, kb_db: KBDatabase, parent=None):
         super().__init__(parent)
         self.kb_db = kb_db
-        self.setWindowTitle("Редактирование нормальных диапазонов")
-        self.setGeometry(100, 100, 700, 400)
         self.setup_ui()
         self.load_ranges()
     
     def setup_ui(self):
         layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
         
         # Table
         self.table = QTableWidget()
@@ -504,10 +498,6 @@ class RangesEditorDialog(QDialog):
         btn_layout.addWidget(self.delete_btn)
         
         btn_layout.addStretch()
-        
-        self.close_btn = QPushButton("Закрыть")
-        self.close_btn.clicked.connect(self.accept)
-        btn_layout.addWidget(self.close_btn)
         
         layout.addLayout(btn_layout)
         self.setLayout(layout)
@@ -625,19 +615,18 @@ class RangeEditDialog(QDialog):
         self.accept()
 
 
-class SeverityEditorDialog(QDialog):
-    """Dialog for editing severity mappings."""
+class SeverityEditorDialog(QWidget):
+    """Widget for editing severity mappings."""
     
     def __init__(self, kb_db: KBDatabase, parent=None):
         super().__init__(parent)
         self.kb_db = kb_db
-        self.setWindowTitle("Редактирование степеней тяжести")
-        self.setGeometry(100, 100, 700, 400)
         self.setup_ui()
         self.load_severity()
     
     def setup_ui(self):
         layout = QVBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
         
         # Table
         self.table = QTableWidget()
@@ -664,10 +653,6 @@ class SeverityEditorDialog(QDialog):
         btn_layout.addWidget(self.delete_btn)
         
         btn_layout.addStretch()
-        
-        self.close_btn = QPushButton("Закрыть")
-        self.close_btn.clicked.connect(self.accept)
-        btn_layout.addWidget(self.close_btn)
         
         layout.addLayout(btn_layout)
         self.setLayout(layout)
@@ -803,59 +788,54 @@ class KBEditorWindow(QMainWindow):
         layout.setSpacing(10)
         layout.setContentsMargins(10, 10, 10, 10)
         
-        # Tab widget for different editors
+        # Tab widget for different editors - open editors directly in tabs
         tabs = QTabWidget()
         
-        # Terms tab
-        self.terms_btn = QPushButton("Редактировать термины")
-        self.terms_btn.clicked.connect(lambda: self.open_dialog(TermsEditorDialog))
-        
+        # Terms tab - embed editor directly
         terms_widget = QWidget()
         terms_layout = QVBoxLayout()
-        terms_layout.addWidget(QLabel("Управление терминами базы знаний:"))
-        terms_layout.addWidget(self.terms_btn)
-        terms_layout.addStretch()
+        terms_layout.setContentsMargins(0, 0, 0, 0)
+        self.terms_editor = TermsEditorDialog(self.kb_db)
+        self.terms_editor.table.setMaximumHeight(300)
+        # Remove close button from embedded dialog
+        terms_layout.addWidget(self.terms_editor)
         terms_widget.setLayout(terms_layout)
         tabs.addTab(terms_widget, "Термины")
         
-        # Ranges tab
-        self.ranges_btn = QPushButton("Редактировать нормальные диапазоны")
-        self.ranges_btn.clicked.connect(lambda: self.open_dialog(RangesEditorDialog))
-        
+        # Ranges tab - embed editor directly
         ranges_widget = QWidget()
         ranges_layout = QVBoxLayout()
-        ranges_layout.addWidget(QLabel("Управление нормальными диапазонами параметров:"))
-        ranges_layout.addWidget(self.ranges_btn)
-        ranges_layout.addStretch()
+        ranges_layout.setContentsMargins(0, 0, 0, 0)
+        self.ranges_editor = RangesEditorDialog(self.kb_db)
+        self.ranges_editor.table.setMaximumHeight(300)
+        ranges_layout.addWidget(self.ranges_editor)
         ranges_widget.setLayout(ranges_layout)
         tabs.addTab(ranges_widget, "Диапазоны")
         
-        # Severity tab
-        self.severity_btn = QPushButton("Редактировать степени тяжести")
-        self.severity_btn.clicked.connect(lambda: self.open_dialog(SeverityEditorDialog))
-        
+        # Severity tab - embed editor directly
         severity_widget = QWidget()
         severity_layout = QVBoxLayout()
-        severity_layout.addWidget(QLabel("Управление маппингом severity для параметров:"))
-        severity_layout.addWidget(self.severity_btn)
-        severity_layout.addStretch()
+        severity_layout.setContentsMargins(0, 0, 0, 0)
+        self.severity_editor = SeverityEditorDialog(self.kb_db)
+        self.severity_editor.table.setMaximumHeight(300)
+        severity_layout.addWidget(self.severity_editor)
         severity_widget.setLayout(severity_layout)
-        tabs.addTab(severity_widget, "Severity")
+        tabs.addTab(severity_widget, "Степени тяжести")
         
         layout.addWidget(tabs)
         
         # Action buttons
         btn_layout = QHBoxLayout()
         
-        self.save_btn = QPushButton("💾 Сохранить БЗ в файл")
+        self.save_btn = QPushButton("Сохранить БЗ в файл")
         self.save_btn.clicked.connect(self.export_kb)
         btn_layout.addWidget(self.save_btn)
         
-        self.load_btn = QPushButton("📂 Загрузить БЗ из файла")
+        self.load_btn = QPushButton("Загрузить БЗ из файла")
         self.load_btn.clicked.connect(self.import_kb)
         btn_layout.addWidget(self.load_btn)
         
-        self.reset_btn = QPushButton("🔄 Сбросить к defaults")
+        self.reset_btn = QPushButton("Сбросить к значениям по умолчанию")
         self.reset_btn.setStyleSheet("background-color: #ff6b6b; color: white;")
         self.reset_btn.clicked.connect(self.reset_kb)
         btn_layout.addWidget(self.reset_btn)
@@ -868,10 +848,6 @@ class KBEditorWindow(QMainWindow):
         
         layout.addLayout(btn_layout)
         central_widget.setLayout(layout)
-    
-    def open_dialog(self, dialog_class):
-        dialog = dialog_class(self.kb_db, self)
-        dialog.exec()
     
     def export_kb(self):
         filepath, _ = QFileDialog.getSaveFileName(
