@@ -155,7 +155,7 @@ class MainWindow(QMainWindow):
         self.measurements_history: List[Dict[str, Any]] = []
         
         # Setup UI
-        self.setWindowTitle("RAS Monitor - Система мониторинга водной среды УЗВ")
+        self.setWindowTitle("Система мониторинга водной среды УЗВ")
         self.setGeometry(100, 100, 1400, 900)
         
         self.create_menu_bar()
@@ -416,23 +416,23 @@ class MainWindow(QMainWindow):
         layout.setSpacing(10)
         
         # Current state card
-        self.card_current_state = StatusCard("Текущее состояние", "—", "#f0f0f0")
+        self.card_current_state = StatusCard("Текущее состояние", "—", "#1E1E24")
         layout.addWidget(self.card_current_state)
         
         # Suitability card
-        self.card_suitability = StatusCard("Пригодность", "—", "#f0f0f0")
+        self.card_suitability = StatusCard("Пригодность", "—", "#1E1E24")
         layout.addWidget(self.card_suitability)
         
         # Past dynamics card
-        self.card_past_dynamics = StatusCard("Динамика (факт)", "—", "#f0f0f0")
+        self.card_past_dynamics = StatusCard("Динамика (факт)", "—", "#1E1E24")
         layout.addWidget(self.card_past_dynamics)
         
         # Forecast dynamics card
-        self.card_forecast_dynamics = StatusCard("Прогноз на t+1", "—", "#f0f0f0")
+        self.card_forecast_dynamics = StatusCard("Прогноз на t+1", "—", "#1E1E24")
         layout.addWidget(self.card_forecast_dynamics)
         
         # Forecast confidence (only shown when ML available)
-        self.card_confidence = StatusCard("Достоверность прогноза", "—", "#f0f0f0")
+        self.card_confidence = StatusCard("Достоверность прогноза", "—", "#1E1E24")
         if not self.ml_available:
             self.card_confidence.update_value("ML не доступен", "#ffcccc")
         layout.addWidget(self.card_confidence)
@@ -452,7 +452,7 @@ class MainWindow(QMainWindow):
         self.history_table = QTableWidget()
         self.history_table.setColumnCount(10)
         self.history_table.setHorizontalHeaderLabels([
-            "ID", "Время", "Temp", "pH", "O₂", "NH₃", "NO₂", "Sal", "Состояние", "Прогноз"
+            "ID", "Время", "С", "pH", "O₂", "NH₃", "NO₂", "Sal", "Состояние", "Прогноз"
         ])
         
         # Configure table - increased size
