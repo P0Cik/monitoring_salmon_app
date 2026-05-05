@@ -637,12 +637,12 @@ class EvaluationEditorDialog(QDialog):
     def load_evaluations(self):
         self.list_widget.clear()
         for eval_item in self.kb_db.get_evaluations():
-            item = QListWidgetItem(f"✓ {eval_item['name']}")
+            item = QListWidgetItem(f"• {eval_item['name']}")
             item.setData(Qt.ItemDataRole.UserRole, eval_item['id'])
 
             # Add delete button as widget
             del_btn = QToolButton()
-            del_btn.setText("🗑️")
+            del_btn.setText("Удалить")
             del_btn.setStyleSheet("color: red; border: none;")
             del_btn.setToolTip("Удалить оценку")
             del_btn.clicked.connect(lambda checked, eid=eval_item['id']: self.delete_evaluation(eid))
@@ -689,16 +689,16 @@ class StateEditorDialog(QDialog):
 
         # List widget with order controls
         self.list_widget = QListWidget()
-        layout.addWidget(QLabel("Список состояний (порядок важен!):"))
+        layout.addWidget(QLabel("Список состояний:"))
         layout.addWidget(self.list_widget)
 
         # Order buttons
         order_layout = QHBoxLayout()
-        self.up_btn = QPushButton("⬆️ Вверх")
+        self.up_btn = QPushButton("↑ Вверх")
         self.up_btn.clicked.connect(self.move_up)
         order_layout.addWidget(self.up_btn)
 
-        self.down_btn = QPushButton("⬇️ Вниз")
+        self.down_btn = QPushButton("↓ Вниз")
         self.down_btn.clicked.connect(self.move_down)
         order_layout.addWidget(self.down_btn)
         order_layout.addStretch()
@@ -795,8 +795,8 @@ class ParameterEditorDialog(QDialog):
 
         # Table
         self.table = QTableWidget()
-        self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(["ID", "Название", "Ед. изм.", "Мин", "Макс"])
+        self.table.setColumnCount(3)
+        self.table.setHorizontalHeaderLabels(["ID", "Название", "Ед. изм."])
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
@@ -804,7 +804,7 @@ class ParameterEditorDialog(QDialog):
 
         # Add parameter form
         form_layout = QGridLayout()
-        form_layout.addWidget(QLabel("Добавить параметр:"), 0, 0, 1, 4)
+        form_layout.addWidget(QLabel("Добавить параметр:"), 0, 0, 1, 3)
 
         self.name_edit = QLineEdit()
         self.name_edit.setPlaceholderText("Название")
@@ -814,22 +814,10 @@ class ParameterEditorDialog(QDialog):
         self.unit_edit.setPlaceholderText("Ед. изм.")
         form_layout.addWidget(self.unit_edit, 1, 1)
 
-        self.min_spin = QDoubleSpinBox()
-        self.min_spin.setRange(-1000, 1000)
-        self.min_spin.setValue(0.0)
-        self.min_spin.setDecimals(2)
-        form_layout.addWidget(self.min_spin, 1, 2)
-
-        self.max_spin = QDoubleSpinBox()
-        self.max_spin.setRange(-1000, 1000)
-        self.max_spin.setValue(100.0)
-        self.max_spin.setDecimals(2)
-        form_layout.addWidget(self.max_spin, 1, 3)
-
-        self.add_btn = QPushButton("+")
+        self.add_btn = QPushButton("Добавить")
         self.add_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
         self.add_btn.clicked.connect(self.add_parameter)
-        form_layout.addWidget(self.add_btn, 1, 4)
+        form_layout.addWidget(self.add_btn, 1, 2)
 
         layout.addLayout(form_layout)
 
@@ -850,8 +838,6 @@ class ParameterEditorDialog(QDialog):
             self.table.setItem(row, 0, QTableWidgetItem(str(p['id'])))
             self.table.setItem(row, 1, QTableWidgetItem(p['name']))
             self.table.setItem(row, 2, QTableWidgetItem(p.get('unit') or ''))
-            self.table.setItem(row, 3, QTableWidgetItem(f"{p.get('min_possible', 0):.2f}"))
-            self.table.setItem(row, 4, QTableWidgetItem(f"{p.get('max_possible', 0):.2f}"))
 
     def add_parameter(self):
         name = self.name_edit.text().strip()
@@ -860,11 +846,9 @@ class ParameterEditorDialog(QDialog):
             return
 
         unit = self.unit_edit.text().strip()
-        min_val = self.min_spin.value()
-        max_val = self.max_spin.value()
 
         try:
-            self.kb_db.add_parameter(name, unit, min_val, max_val)
+            self.kb_db.add_parameter(name, unit, 0.0, 100.0)
             self.name_edit.clear()
             self.unit_edit.clear()
             self.load_parameters()
@@ -1015,7 +999,7 @@ class StateClinicalPictureDialog(QDialog):
         self.param_checks = {}
         for p in self.kb_db.get_parameters():
             cb = QCheckBox(p['name'])
-            cb.setData(p['id'])
+            cb.setProperty('param_id', p['id'])
             self.checks_layout.addWidget(cb)
             self.param_checks[p['id']] = cb
 
@@ -1097,14 +1081,18 @@ class NormalRangesDialog(QDialog):
 
             interval_combo = QComboBox()
             interval_combo.addItems(self.INTERVAL_TYPES)
-            inv_map = {v: k for k, v in self.INTERVAL_MAP.items()}
-            idx = list(inv_map.keys()).index(inv_map.get(r['interval_type'], '[)'))
+            # Find index by matching interval_type to INTERVAL_MAP values
+            current_interval = r['interval_type']
+            idx = 0
+            for i, (key, value) in enumerate(self.INTERVAL_MAP.items()):
+                if value == current_interval:
+                    idx = i
+                    break
             interval_combo.setCurrentIndex(idx)
             self.table.setCellWidget(row, 3, interval_combo)
 
     def save_ranges(self):
         params = self.kb_db.get_parameters()
-        inv_map = {v: k for k, v in self.INTERVAL_MAP.items()}
 
         for row, p in enumerate(params):
             min_w = self.table.cellWidget(row, 1)
@@ -1113,7 +1101,10 @@ class NormalRangesDialog(QDialog):
 
             min_val = min_w.value()
             max_val = max_w.value()
-            interval_type = inv_map[self.INTERVAL_TYPES[interval_w.currentIndex()]]
+
+            # Get interval type by matching selected index to INTERVAL_MAP
+            selected_index = interval_w.currentIndex()
+            interval_type = list(self.INTERVAL_MAP.values())[selected_index]
 
             if min_val >= max_val:
                 QMessageBox.warning(self, "Ошибка", f"Для {p['name']}: минимум должен быть меньше максимума")
@@ -1219,7 +1210,6 @@ class SeverityMappingDialog(QDialog):
 
         mappings = self.kb_db.get_severity_mapping(param_id)
         states = {s['id']: s['name'] for s in self.kb_db.get_states()}
-        inv_map = {v: k for k, v in self.INTERVAL_MAP.items()}
 
         for m in mappings:
             row = self.table.rowCount()
@@ -1235,7 +1225,7 @@ class SeverityMappingDialog(QDialog):
 
             # Delete button
             del_btn = QToolButton()
-            del_btn.setText("🗑️")
+            del_btn.setText("Удалить")
             del_btn.setStyleSheet("color: red; border: none;")
             del_btn.clicked.connect(lambda checked, mid=m['id']: self.delete_mapping(mid))
             self.table.setCellWidget(row, 2, del_btn)
@@ -1288,34 +1278,41 @@ class SuitabilityValuesDialog(QDialog):
 
         # Ranges table
         self.table = QTableWidget()
-        self.table.setColumnCount(3)
-        self.table.setHorizontalHeaderLabels(["Интервал значений", "", ""])
+        self.table.setColumnCount(4)
+        self.table.setHorizontalHeaderLabels(["Интервал значений", "Оценка", "", ""])
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self.table)
 
         # Add range form
         form_group = QGroupBox("Добавить интервал:")
-        form_layout = QHBoxLayout()
+        form_layout = QGridLayout()
 
-        form_layout.addWidget(QLabel("Мин:"))
-        self.min_spin = QDoubleSpinBox()
-        self.min_spin.setRange(-1000, 1000)
-        self.min_spin.setValue(0.0)
-        self.min_spin.setDecimals(2)
-        form_layout.addWidget(self.min_spin)
+        form_layout.addWidget(QLabel("Мин:"), 0, 0)
+        self.min1_spin = QDoubleSpinBox()
+        self.min1_spin.setRange(-1000, 1000)
+        self.min1_spin.setValue(0.0)
+        self.min1_spin.setDecimals(2)
+        form_layout.addWidget(self.min1_spin, 0, 1)
 
-        form_layout.addWidget(QLabel("Макс:"))
-        self.max_spin = QDoubleSpinBox()
-        self.max_spin.setRange(-1000, 1000)
-        self.max_spin.setValue(0.0)
-        self.max_spin.setDecimals(2)
-        form_layout.addWidget(self.max_spin)
+        form_layout.addWidget(QLabel("Макс:"), 0, 2)
+        self.max1_spin = QDoubleSpinBox()
+        self.max1_spin.setRange(-1000, 1000)
+        self.max1_spin.setValue(0.0)
+        self.max1_spin.setDecimals(2)
+        form_layout.addWidget(self.max1_spin, 0, 3)
 
-        self.add_btn = QPushButton("+")
+        form_layout.addWidget(QLabel("Оценка:"), 0, 4)
+        self.eval_combo = QComboBox()
+        for e in self.kb_db.get_evaluations():
+            self.eval_combo.addItem(e['name'], e['id'])
+        form_layout.addWidget(self.eval_combo, 0, 5)
+
+        self.add_btn = QPushButton("Добавить")
         self.add_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
         self.add_btn.clicked.connect(self.add_range)
-        form_layout.addWidget(self.add_btn)
+        form_layout.addWidget(self.add_btn, 0, 6)
 
         form_group.setLayout(form_layout)
         layout.addWidget(form_group)
@@ -1348,27 +1345,34 @@ class SuitabilityValuesDialog(QDialog):
             return
 
         ranges = self.kb_db.get_suitability_ranges(param_id)
+        evaluations = {e['id']: e['name'] for e in self.kb_db.get_evaluations()}
 
         for r in ranges:
             row = self.table.rowCount()
             self.table.insertRow(row)
 
+            # Build interval string
             interval_str = f"[{r['min1']:.1f}; {r['max1']:.1f})"
             if r['min2'] is not None:
                 interval_str += f" ∪ [{r['min2']:.1f}; {r['max2']:.1f})"
 
             self.table.setItem(row, 0, QTableWidgetItem(interval_str))
 
+            # Show evaluation (assuming we store eval_id in the future, for now show "непригодна")
+            self.table.setItem(row, 1, QTableWidgetItem("непригодна"))
+
+            # Delete button
             del_btn = QToolButton()
-            del_btn.setText("🗑️")
+            del_btn.setText("Удалить")
             del_btn.setStyleSheet("color: red; border: none;")
             del_btn.clicked.connect(lambda checked, rid=r['id']: self.delete_range(rid))
-            self.table.setCellWidget(row, 1, del_btn)
+            self.table.setCellWidget(row, 2, del_btn)
 
     def add_range(self):
         param_id = self.param_combo.currentData()
-        min1 = self.min_spin.value()
-        max1 = self.max_spin.value()
+        eval_id = self.eval_combo.currentData()
+        min1 = self.min1_spin.value()
+        max1 = self.max1_spin.value()
 
         if min1 >= max1:
             QMessageBox.warning(self, "Ошибка", "Минимум должен быть меньше максимума")
@@ -1487,11 +1491,11 @@ class StateOrderDialog(QDialog):
 
         # Order buttons
         order_layout = QHBoxLayout()
-        self.up_btn = QPushButton("⬆️ Вверх")
+        self.up_btn = QPushButton("↑ Вверх")
         self.up_btn.clicked.connect(self.move_up)
         order_layout.addWidget(self.up_btn)
 
-        self.down_btn = QPushButton("⬇️ Вниз")
+        self.down_btn = QPushButton("↓ Вниз")
         self.down_btn.clicked.connect(self.move_down)
         order_layout.addWidget(self.down_btn)
         order_layout.addStretch()
@@ -1605,19 +1609,19 @@ class KBEditorMainWindow(QMainWindow):
         btn_layout = QVBoxLayout()
         btn_layout.setSpacing(10)
 
-        self.completeness_btn = QPushButton("📋 Проверка полноты знаний")
+        self.completeness_btn = QPushButton("Проверка полноты знаний")
         self.completeness_btn.clicked.connect(self.check_completeness)
         btn_layout.addWidget(self.completeness_btn)
 
-        self.save_db_btn = QPushButton("💾 Сохранить в БД")
+        self.save_db_btn = QPushButton("Сохранить в БД")
         self.save_db_btn.clicked.connect(self.save_to_db)
         btn_layout.addWidget(self.save_db_btn)
 
-        self.load_db_btn = QPushButton("📂 Загрузить из БД")
+        self.load_db_btn = QPushButton("Загрузить из БД")
         self.load_db_btn.clicked.connect(self.load_from_db)
         btn_layout.addWidget(self.load_db_btn)
 
-        self.reset_btn = QPushButton("🔄 Сбросить к значениям по умолчанию")
+        self.reset_btn = QPushButton("Сбросить к значениям по умолчанию")
         self.reset_btn.setStyleSheet("background-color: #ff6b6b; color: white;")
         self.reset_btn.clicked.connect(self.reset_kb)
         btn_layout.addWidget(self.reset_btn)

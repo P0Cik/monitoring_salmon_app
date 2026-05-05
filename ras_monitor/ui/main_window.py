@@ -11,7 +11,8 @@ from typing import Optional, Dict, Any, List
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QLineEdit, QPushButton, QGroupBox, QTableWidget,
-    QTableWidgetItem, QHeaderView, QFrame, QScrollArea, QMessageBox
+    QTableWidgetItem, QHeaderView, QFrame, QScrollArea, QMessageBox,
+    QProgressBar
 )
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
@@ -27,6 +28,199 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from core.solver import Solver, MeasurementData, SolverResult
 from core.db import Database
 from ml.predictor import Predictor
+
+
+class MLForecastCard(QFrame):
+    """Enhanced card widget for ML forecast with probability visualization."""
+
+    def __init__(self, title: str = "Прогноз ML"):
+        super().__init__()
+        self.title = title
+        self.probabilities = {}
+        self.confidence = 0.0
+        self.forecast_dynamics = "—"
+
+        self.setup_ui()
+
+    def setup_ui(self) -> None:
+        """Set up the enhanced forecast card UI."""
+        self.setFrameStyle(QFrame.Shape.StyledPanel)
+        self.setStyleSheet("""
+            QFrame {
+                background-color: #2A2A35;
+                border-radius: 8px;
+                border: 1px solid #3A3A45;
+                padding: 8px;
+                color: #E0E0E0;
+            }
+            QFrame:hover {
+                border: 1px solid #5A5A65;
+            }
+        """)
+
+        layout = QVBoxLayout()
+        layout.setSpacing(4)
+        layout.setContentsMargins(8, 8, 8, 8)
+
+        # Title
+        title_label = QLabel(self.title)
+        title_label.setFont(QFont("Arial", 9, QFont.Weight.Bold))
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_label.setStyleSheet("color: #AAAAAA;")
+        title_label.setWordWrap(True)
+        layout.addWidget(title_label)
+
+        # Forecast dynamics
+        self.dynamics_label = QLabel("—")
+        self.dynamics_label.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+        self.dynamics_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.dynamics_label.setStyleSheet("color: #E0E0E0;")
+        self.dynamics_label.setWordWrap(True)
+        layout.addWidget(self.dynamics_label)
+
+        # Confidence indicator
+        conf_layout = QHBoxLayout()
+        conf_layout.setSpacing(4)
+        conf_label = QLabel("Уверенность:")
+        conf_label.setStyleSheet("font-size: 8pt;")
+        conf_label.setWordWrap(True)
+        conf_layout.addWidget(conf_label)
+        self.confidence_bar = QProgressBar()
+        self.confidence_bar.setRange(0, 100)
+        self.confidence_bar.setValue(0)
+        self.confidence_bar.setTextVisible(True)
+        self.confidence_bar.setMaximumHeight(16)
+        self.confidence_bar.setStyleSheet("""
+            QProgressBar {
+                border: 1px solid #3A3A45;
+                border-radius: 3px;
+                text-align: center;
+                background-color: #1E1E24;
+                color: #E0E0E0;
+                font-size: 8pt;
+            }
+            QProgressBar::chunk {
+                background-color: #4CAF50;
+            }
+        """)
+        conf_layout.addWidget(self.confidence_bar)
+        layout.addLayout(conf_layout)
+
+        # Probabilities section
+        prob_label = QLabel("Вероятности состояний:")
+        prob_label.setFont(QFont("Arial", 8))
+        prob_label.setStyleSheet("color: #AAAAAA;")
+        prob_label.setWordWrap(True)
+        layout.addWidget(prob_label)
+
+        # Create progress bars for each state
+        self.state_bars = {}
+        state_names = {
+            1: "Отходящее от нормы",
+            2: "Неустойчивое",
+            3: "Угроза биобаланса",
+            4: "Критическое"
+        }
+
+        for state_id, state_name in state_names.items():
+            state_layout = QHBoxLayout()
+            state_layout.setSpacing(6)
+
+            # State label with number and name
+            label = QLabel(f"{state_id}. {state_name}")
+            label.setStyleSheet("color: #AAAAAA; font-size: 8pt;")
+            label.setWordWrap(True)
+            state_layout.addWidget(label, 1)
+
+            bar = QProgressBar()
+            bar.setRange(0, 100)
+            bar.setValue(0)
+            bar.setTextVisible(True)
+            bar.setMaximumHeight(14)
+            bar.setMinimumWidth(50)
+            bar.setStyleSheet(f"""
+                QProgressBar {{
+                    border: 1px solid #3A3A45;
+                    border-radius: 2px;
+                    text-align: center;
+                    background-color: #1E1E24;
+                    color: #E0E0E0;
+                    font-size: 7pt;
+                }}
+                QProgressBar::chunk {{
+                    background-color: {self._get_state_color(state_id)};
+                }}
+            """)
+            state_layout.addWidget(bar, 1)
+
+            layout.addLayout(state_layout)
+            self.state_bars[state_id] = bar
+
+        self.setLayout(layout)
+
+    def _get_state_color(self, state_id: int) -> str:
+        """Get color for state."""
+        colors = {
+            1: "#FFC107",  # Yellow
+            2: "#FF9800",  # Orange
+            3: "#FF5722",  # Deep Orange
+            4: "#F44336",  # Red
+        }
+        return colors.get(state_id, "#4CAF50")
+
+    def update_forecast(
+        self,
+        dynamics: str,
+        confidence: float,
+        probabilities: Dict[int, float]
+    ) -> None:
+        """Update the forecast card with new ML predictions."""
+        self.forecast_dynamics = dynamics
+        self.confidence = confidence
+        self.probabilities = probabilities
+
+        # Update dynamics label
+        self.dynamics_label.setText(dynamics)
+
+        # Update confidence bar
+        conf_percent = int(confidence * 100)
+        self.confidence_bar.setValue(conf_percent)
+
+        # Update confidence bar color based on value
+        if confidence > 0.7:
+            chunk_color = "#4CAF50"  # Green
+        elif confidence > 0.5:
+            chunk_color = "#FFC107"  # Yellow
+        else:
+            chunk_color = "#F44336"  # Red
+
+        self.confidence_bar.setStyleSheet(f"""
+            QProgressBar {{
+                border: 1px solid #3A3A45;
+                border-radius: 3px;
+                text-align: center;
+                background-color: #1E1E24;
+                color: #E0E0E0;
+            }}
+            QProgressBar::chunk {{
+                background-color: {chunk_color};
+            }}
+        """)
+
+        # Update state probability bars
+        for state_id, bar in self.state_bars.items():
+            prob = probabilities.get(state_id, 0.0)
+            prob_percent = int(prob * 100)
+            bar.setValue(prob_percent)
+            bar.setFormat(f"{prob_percent}%")
+
+    def clear_forecast(self) -> None:
+        """Clear forecast display."""
+        self.dynamics_label.setText("Недостаточно данных")
+        self.confidence_bar.setValue(0)
+        for bar in self.state_bars.values():
+            bar.setValue(0)
+            bar.setFormat("0%")
 
 
 class StatusCard(QFrame):
@@ -414,32 +608,29 @@ class MainWindow(QMainWindow):
         group = QGroupBox("Состояние системы")
         layout = QVBoxLayout()
         layout.setSpacing(10)
-        
+
         # Current state card
         self.card_current_state = StatusCard("Текущее состояние", "—", "#1E1E24")
         layout.addWidget(self.card_current_state)
-        
+
         # Suitability card
         self.card_suitability = StatusCard("Пригодность", "—", "#1E1E24")
         layout.addWidget(self.card_suitability)
-        
+
         # Past dynamics card
         self.card_past_dynamics = StatusCard("Динамика (факт)", "—", "#1E1E24")
         layout.addWidget(self.card_past_dynamics)
-        
-        # Forecast dynamics card
-        self.card_forecast_dynamics = StatusCard("Прогноз на t+1", "—", "#1E1E24")
-        layout.addWidget(self.card_forecast_dynamics)
-        
-        # Forecast confidence (only shown when ML available)
-        self.card_confidence = StatusCard("Достоверность прогноза", "—", "#1E1E24")
+
+        # ML Forecast card (enhanced with probabilities)
+        self.card_ml_forecast = MLForecastCard("Прогноз ML (t+1)")
         if not self.ml_available:
-            self.card_confidence.update_value("ML не доступен", "#ffcccc")
-        layout.addWidget(self.card_confidence)
-        
+            self.card_ml_forecast.dynamics_label.setText("ML не доступен")
+            self.card_ml_forecast.dynamics_label.setStyleSheet("color: #F44336;")
+        layout.addWidget(self.card_ml_forecast)
+
         # Spacer
         layout.addStretch()
-        
+
         group.setLayout(layout)
         return group
     
@@ -514,13 +705,13 @@ class MainWindow(QMainWindow):
         data = self.get_input_values()
         if data is None:
             return
-        
+
         # Get previous state for dynamics calculation
         previous_state = self.db.get_last_state()
-        
+
         # Evaluate with solver
         result = self.solver.evaluate(data, previous_state)
-        
+
         # Save measurement to database
         measurement_id = self.db.add_measurement(
             temp=data.temp,
@@ -530,21 +721,23 @@ class MainWindow(QMainWindow):
             nitrite=data.nitrite,
             salinity=data.salinity,
         )
-        
+
         # Get forecast if ML is available
         forecast_dynamics = "—"
         forecast_confidence = None
-        
+        forecast_probs = None
+
         if self.ml_available:
             recent = self.db.get_recent_measurements_for_ml(window_size=6)
             if recent is not None:
                 probs = self.predictor.predict(recent)
                 if probs:
+                    forecast_probs = probs
                     forecast_dynamics = self.predictor.get_forecast_dynamics(
                         result.current_state, probs
                     )
                     forecast_confidence = self.predictor.get_confidence(probs)
-        
+
         # Save history record
         self.db.add_history(
             measurement_id=measurement_id,
@@ -554,12 +747,12 @@ class MainWindow(QMainWindow):
             forecast_dynamics=forecast_dynamics if forecast_dynamics != "—" else None,
             forecast_confidence=forecast_confidence,
         )
-        
+
         # Update UI
-        self.update_status_cards(result, forecast_dynamics, forecast_confidence)
+        self.update_status_cards(result, forecast_dynamics, forecast_confidence, forecast_probs)
         self.refresh_chart()
         self.load_history()
-        
+
         # Show success message
         QMessageBox.information(
             self,
@@ -570,42 +763,35 @@ class MainWindow(QMainWindow):
         )
     
     def update_status_cards(
-        self, 
+        self,
         result: SolverResult,
         forecast_dynamics: str,
-        forecast_confidence: Optional[float]
+        forecast_confidence: Optional[float],
+        forecast_probs: Optional[Dict[int, float]] = None
     ) -> None:
         """Update the status cards with new data."""
         # Current state
         state_desc = self.solver.get_state_description(result.current_state)
         state_color = self.STATE_COLORS.get(result.current_state, "#f0f0f0")
         self.card_current_state.update_value(state_desc, state_color)
-        
+
         # Suitability
         suit_color = self.SUITABILITY_COLORS.get(result.suitability, "#f0f0f0")
         self.card_suitability.update_value(result.suitability, suit_color)
-        
+
         # Past dynamics
         dyn_color = self.DYNAMICS_COLORS.get(result.past_dynamics, "#f0f0f0")
         self.card_past_dynamics.update_value(result.past_dynamics, dyn_color)
-        
-        # Forecast dynamics
-        if forecast_dynamics and forecast_dynamics != "—":
-            forecast_color = self.DYNAMICS_COLORS.get(forecast_dynamics, "#f0f0f0")
-            self.card_forecast_dynamics.update_value(forecast_dynamics, forecast_color)
+
+        # ML Forecast card
+        if forecast_dynamics and forecast_dynamics != "—" and forecast_confidence is not None and forecast_probs:
+            self.card_ml_forecast.update_forecast(
+                dynamics=forecast_dynamics,
+                confidence=forecast_confidence,
+                probabilities=forecast_probs
+            )
         else:
-            self.card_forecast_dynamics.update_value("Недостаточно данных", "#f0f0f0")
-        
-        # Forecast confidence
-        if forecast_confidence is not None:
-            conf_text = f"{forecast_confidence * 100:.1f}%"
-            if forecast_confidence > 0.7:
-                conf_color = "#90EE90"
-            elif forecast_confidence > 0.4:
-                conf_color = "#FFD700"
-            else:
-                conf_color = "#FFB6C1"
-            self.card_confidence.update_value(conf_text, conf_color)
+            self.card_ml_forecast.clear_forecast()
     
     def plot_data(self) -> None:
         """Plot measurement data on separate charts for each parameter."""
