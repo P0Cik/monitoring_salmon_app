@@ -33,8 +33,84 @@ class KBDatabase:
         self.db_path = db_path
         self.conn = sqlite3.connect(db_path)
         self.conn.row_factory = sqlite3.Row
+        self._migrate_if_needed()
         self._create_tables()
         self._init_defaults()
+
+    def _migrate_if_needed(self):
+        """Migrate old schema with interval_type to new schema without it."""
+        cursor = self.conn.cursor()
+
+        # Check if old schema exists by looking for interval_type column in kb_normal_ranges
+        try:
+            cursor.execute("PRAGMA table_info(kb_normal_ranges)")
+            columns = [row[1] for row in cursor.fetchall()]
+
+            if 'interval_type' not in columns:
+                # New schema or first run, no migration needed
+                return
+
+            # Old schema detected, perform migration
+            print("Migrating database schema: removing interval_type columns...")
+
+            # Migrate kb_normal_ranges
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS kb_normal_ranges_new (
+                    parameter_id INTEGER PRIMARY KEY REFERENCES kb_parameters(id),
+                    min_value REAL NOT NULL,
+                    max_value REAL NOT NULL
+                )
+            """)
+            cursor.execute("""
+                INSERT INTO kb_normal_ranges_new (parameter_id, min_value, max_value)
+                SELECT parameter_id, min_value, max_value FROM kb_normal_ranges
+            """)
+            cursor.execute("DROP TABLE kb_normal_ranges")
+            cursor.execute("ALTER TABLE kb_normal_ranges_new RENAME TO kb_normal_ranges")
+
+            # Migrate kb_severity_mapping
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS kb_severity_mapping_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    parameter_id INTEGER REFERENCES kb_parameters(id),
+                    min1 REAL,
+                    max1 REAL,
+                    min2 REAL,
+                    max2 REAL,
+                    state_id INTEGER REFERENCES kb_states(id)
+                )
+            """)
+            cursor.execute("""
+                INSERT INTO kb_severity_mapping_new (id, parameter_id, min1, max1, min2, max2, state_id)
+                SELECT id, parameter_id, min1, max1, min2, max2, state_id FROM kb_severity_mapping
+            """)
+            cursor.execute("DROP TABLE kb_severity_mapping")
+            cursor.execute("ALTER TABLE kb_severity_mapping_new RENAME TO kb_severity_mapping")
+
+            # Migrate kb_suitability_ranges
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS kb_suitability_ranges_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    parameter_id INTEGER REFERENCES kb_parameters(id),
+                    min1 REAL,
+                    max1 REAL,
+                    min2 REAL,
+                    max2 REAL
+                )
+            """)
+            cursor.execute("""
+                INSERT INTO kb_suitability_ranges_new (id, parameter_id, min1, max1, min2, max2)
+                SELECT id, parameter_id, min1, max1, min2, max2 FROM kb_suitability_ranges
+            """)
+            cursor.execute("DROP TABLE kb_suitability_ranges")
+            cursor.execute("ALTER TABLE kb_suitability_ranges_new RENAME TO kb_suitability_ranges")
+
+            self.conn.commit()
+            print("Migration completed successfully.")
+
+        except sqlite3.OperationalError:
+            # Table doesn't exist yet, first run
+            pass
 
     def _create_tables(self):
         """Create all KB tables if they don't exist."""
@@ -90,8 +166,7 @@ class KBDatabase:
             CREATE TABLE IF NOT EXISTS kb_normal_ranges (
                 parameter_id INTEGER PRIMARY KEY REFERENCES kb_parameters(id),
                 min_value REAL NOT NULL,
-                max_value REAL NOT NULL,
-                interval_type TEXT DEFAULT '[)'
+                max_value REAL NOT NULL
             )
         """)
 
@@ -113,9 +188,7 @@ class KBDatabase:
                 max1 REAL,
                 min2 REAL,
                 max2 REAL,
-                state_id INTEGER REFERENCES kb_states(id),
-                interval_type1 TEXT DEFAULT '[)',
-                interval_type2 TEXT DEFAULT '[)'
+                state_id INTEGER REFERENCES kb_states(id)
             )
         """)
 
@@ -127,9 +200,7 @@ class KBDatabase:
                 min1 REAL,
                 max1 REAL,
                 min2 REAL,
-                max2 REAL,
-                interval_type1 TEXT DEFAULT '[)',
-                interval_type2 TEXT DEFAULT '[)'
+                max2 REAL
             )
         """)
 
@@ -212,15 +283,15 @@ class KBDatabase:
         cursor.execute("SELECT COUNT(*) FROM kb_normal_ranges")
         if cursor.fetchone()[0] == 0:
             normal_ranges = [
-                (1, 12.0, 14.0, '[)'),   # температура
-                (2, 7.4, 7.8, '[)'),     # pH
-                (3, 90.0, 100.0, '[)'),  # O₂
-                (4, 0.0, 0.5, '(]'),     # аммиак
-                (5, 0.0, 0.1, '(]'),     # нитриты
-                (6, 0.0, 0.0, '[)'),     # солёность
+                (1, 12.0, 14.0),   # температура
+                (2, 7.4, 7.8),     # pH
+                (3, 90.0, 100.0),  # O₂
+                (4, 0.0, 0.5),     # аммиак
+                (5, 0.0, 0.1),     # нитриты
+                (6, 0.0, 0.0),     # солёность
             ]
             cursor.executemany(
-                "INSERT INTO kb_normal_ranges (parameter_id, min_value, max_value, interval_type) VALUES (?, ?, ?, ?)",
+                "INSERT INTO kb_normal_ranges (parameter_id, min_value, max_value) VALUES (?, ?, ?)",
                 normal_ranges
             )
 
@@ -249,15 +320,15 @@ class KBDatabase:
         cursor.execute("SELECT COUNT(*) FROM kb_suitability_ranges")
         if cursor.fetchone()[0] == 0:
             suitability_ranges = [
-                (1, 5.0, 12.0, 14.0, 32.0, '[)', '(]'),   # температура
-                (2, 0.0, 7.4, 7.8, 14.0, '[)', '(]'),     # pH
-                (3, 0.0, 90.0, None, None, '[)', None),   # O₂
-                (4, 0.5, 2.0, None, None, '(]', None),    # аммиак
-                (5, 0.1, 5.0, None, None, '(]', None),    # нитриты
-                (6, 0.1, 35.0, None, None, '(]', None),   # солёность
+                (1, 5.0, 12.0, 14.0, 32.0),   # температура
+                (2, 0.0, 7.4, 7.8, 14.0),     # pH
+                (3, 0.0, 90.0, None, None),   # O₂
+                (4, 0.5, 2.0, None, None),    # аммиак
+                (5, 0.1, 5.0, None, None),    # нитриты
+                (6, 0.1, 35.0, None, None),   # солёность
             ]
             cursor.executemany(
-                "INSERT INTO kb_suitability_ranges (parameter_id, min1, max1, min2, max2, interval_type1, interval_type2) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO kb_suitability_ranges (parameter_id, min1, max1, min2, max2) VALUES (?, ?, ?, ?, ?)",
                 suitability_ranges
             )
 
@@ -278,87 +349,87 @@ class KBDatabase:
         """Initialize default severity mappings."""
         # Temperature severity (param_id=1)
         temp_sev = [
-            (1, 11.0, 12.0, None, None, 1, '[)', None),
-            (1, 14.0, 15.0, None, None, 1, '[)', None),
-            (1, 9.0, 11.0, None, None, 2, '[)', None),
-            (1, 15.0, 17.0, None, None, 2, '[)', None),
-            (1, 5.0, 9.0, None, None, 3, '[)', None),
-            (1, 17.0, 21.0, None, None, 3, '[)', None),
-            (1, -100.0, 5.0, None, None, 4, '[)', None),
-            (1, 21.0, 100.0, None, None, 4, '[)', None),
+            (1, 11.0, 12.0, None, None, 1),
+            (1, 14.0, 15.0, None, None, 1),
+            (1, 9.0, 11.0, None, None, 2),
+            (1, 15.0, 17.0, None, None, 2),
+            (1, 5.0, 9.0, None, None, 3),
+            (1, 17.0, 21.0, None, None, 3),
+            (1, -100.0, 5.0, None, None, 4),
+            (1, 21.0, 100.0, None, None, 4),
         ]
         for row in temp_sev:
             cursor.execute(
-                "INSERT INTO kb_severity_mapping (parameter_id, min1, max1, min2, max2, state_id, interval_type1, interval_type2) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO kb_severity_mapping (parameter_id, min1, max1, min2, max2, state_id) VALUES (?, ?, ?, ?, ?, ?)",
                 row
             )
 
         # pH severity (param_id=2)
         ph_sev = [
-            (2, 7.2, 7.4, None, None, 1, '[)', None),
-            (2, 7.8, 8.0, None, None, 1, '[)', None),
-            (2, 7.0, 7.2, None, None, 2, '[)', None),
-            (2, 8.0, 8.2, None, None, 2, '[)', None),
-            (2, 6.6, 7.0, None, None, 3, '[)', None),
-            (2, 8.2, 8.6, None, None, 3, '[)', None),
-            (2, -100.0, 6.6, None, None, 4, '[)', None),
-            (2, 8.6, 100.0, None, None, 4, '[)', None),
+            (2, 7.2, 7.4, None, None, 1),
+            (2, 7.8, 8.0, None, None, 1),
+            (2, 7.0, 7.2, None, None, 2),
+            (2, 8.0, 8.2, None, None, 2),
+            (2, 6.6, 7.0, None, None, 3),
+            (2, 8.2, 8.6, None, None, 3),
+            (2, -100.0, 6.6, None, None, 4),
+            (2, 8.6, 100.0, None, None, 4),
         ]
         for row in ph_sev:
             cursor.execute(
-                "INSERT INTO kb_severity_mapping (parameter_id, min1, max1, min2, max2, state_id, interval_type1, interval_type2) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO kb_severity_mapping (parameter_id, min1, max1, min2, max2, state_id) VALUES (?, ?, ?, ?, ?, ?)",
                 row
             )
 
         # O2 severity (param_id=3)
         o2_sev = [
-            (3, 85.0, 90.0, None, None, 1, '[)', None),
-            (3, 70.0, 85.0, None, None, 2, '[)', None),
-            (3, 60.0, 70.0, None, None, 3, '[)', None),
-            (3, -100.0, 60.0, None, None, 4, '[)', None),
+            (3, 85.0, 90.0, None, None, 1),
+            (3, 70.0, 85.0, None, None, 2),
+            (3, 60.0, 70.0, None, None, 3),
+            (3, -100.0, 60.0, None, None, 4),
         ]
         for row in o2_sev:
             cursor.execute(
-                "INSERT INTO kb_severity_mapping (parameter_id, min1, max1, min2, max2, state_id, interval_type1, interval_type2) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO kb_severity_mapping (parameter_id, min1, max1, min2, max2, state_id) VALUES (?, ?, ?, ?, ?, ?)",
                 row
             )
 
         # Ammonia severity (param_id=4)
         nh3_sev = [
-            (4, 0.5, 0.6, None, None, 1, '(]', None),
-            (4, 0.6, 1.0, None, None, 2, '(]', None),
-            (4, 1.0, 1.5, None, None, 3, '(]', None),
-            (4, 1.5, 100.0, None, None, 4, '(]', None),
+            (4, 0.5, 0.6, None, None, 1),
+            (4, 0.6, 1.0, None, None, 2),
+            (4, 1.0, 1.5, None, None, 3),
+            (4, 1.5, 100.0, None, None, 4),
         ]
         for row in nh3_sev:
             cursor.execute(
-                "INSERT INTO kb_severity_mapping (parameter_id, min1, max1, min2, max2, state_id, interval_type1, interval_type2) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO kb_severity_mapping (parameter_id, min1, max1, min2, max2, state_id) VALUES (?, ?, ?, ?, ?, ?)",
                 row
             )
 
         # Nitrite severity (param_id=5)
         no2_sev = [
-            (5, 0.1, 0.15, None, None, 1, '(]', None),
-            (5, 0.15, 0.2, None, None, 2, '(]', None),
-            (5, 0.2, 0.25, None, None, 3, '(]', None),
-            (5, 0.25, 100.0, None, None, 4, '(]', None),
+            (5, 0.1, 0.15, None, None, 1),
+            (5, 0.15, 0.2, None, None, 2),
+            (5, 0.2, 0.25, None, None, 3),
+            (5, 0.25, 100.0, None, None, 4),
         ]
         for row in no2_sev:
             cursor.execute(
-                "INSERT INTO kb_severity_mapping (parameter_id, min1, max1, min2, max2, state_id, interval_type1, interval_type2) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO kb_severity_mapping (parameter_id, min1, max1, min2, max2, state_id) VALUES (?, ?, ?, ?, ?, ?)",
                 row
             )
 
         # Salinity severity (param_id=6)
         sal_sev = [
-            (6, 0.0, 0.1, None, None, 1, '[)', None),
-            (6, 0.1, 0.5, None, None, 2, '[)', None),
-            (6, 0.5, 1.0, None, None, 3, '[)', None),
-            (6, 1.0, 100.0, None, None, 4, '[)', None),
+            (6, 0.0, 0.1, None, None, 1),
+            (6, 0.1, 0.5, None, None, 2),
+            (6, 0.5, 1.0, None, None, 3),
+            (6, 1.0, 100.0, None, None, 4),
         ]
         for row in sal_sev:
             cursor.execute(
-                "INSERT INTO kb_severity_mapping (parameter_id, min1, max1, min2, max2, state_id, interval_type1, interval_type2) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO kb_severity_mapping (parameter_id, min1, max1, min2, max2, state_id) VALUES (?, ?, ?, ?, ?, ?)",
                 row
             )
 
@@ -472,19 +543,19 @@ class KBDatabase:
     def get_normal_ranges(self) -> List[Dict]:
         cursor = self.conn.cursor()
         cursor.execute("""
-            SELECT p.name, r.min_value, r.max_value, r.interval_type
+            SELECT p.name, r.min_value, r.max_value
             FROM kb_normal_ranges r
             JOIN kb_parameters p ON r.parameter_id = p.id
             ORDER BY p.id
         """)
         return [dict(row) for row in cursor.fetchall()]
 
-    def save_normal_range(self, parameter_id: int, min_value: float, max_value: float, interval_type: str):
+    def save_normal_range(self, parameter_id: int, min_value: float, max_value: float):
         cursor = self.conn.cursor()
         cursor.execute("""
-            INSERT OR REPLACE INTO kb_normal_ranges (parameter_id, min_value, max_value, interval_type)
-            VALUES (?, ?, ?, ?)
-        """, (parameter_id, min_value, max_value, interval_type))
+            INSERT OR REPLACE INTO kb_normal_ranges (parameter_id, min_value, max_value)
+            VALUES (?, ?, ?)
+        """, (parameter_id, min_value, max_value))
         self.conn.commit()
 
     # ==================== Possible Ranges methods ====================
@@ -518,12 +589,12 @@ class KBDatabase:
 
     def add_severity_mapping(self, parameter_id: int, min1: float, max1: float,
                              min2: Optional[float], max2: Optional[float],
-                             state_id: int, interval_type1: str = '[)', interval_type2: str = '[)'):
+                             state_id: int):
         cursor = self.conn.cursor()
         cursor.execute("""
-            INSERT INTO kb_severity_mapping (parameter_id, min1, max1, min2, max2, state_id, interval_type1, interval_type2)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (parameter_id, min1, max1, min2, max2, state_id, interval_type1, interval_type2))
+            INSERT INTO kb_severity_mapping (parameter_id, min1, max1, min2, max2, state_id)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (parameter_id, min1, max1, min2, max2, state_id))
         self.conn.commit()
 
     def delete_severity_mapping(self, mapping_id: int):
@@ -541,13 +612,12 @@ class KBDatabase:
         return [dict(row) for row in cursor.fetchall()]
 
     def add_suitability_range(self, parameter_id: int, min1: float, max1: float,
-                              min2: Optional[float], max2: Optional[float],
-                              interval_type1: str = '[)', interval_type2: str = '[)'):
+                              min2: Optional[float], max2: Optional[float]):
         cursor = self.conn.cursor()
         cursor.execute("""
-            INSERT INTO kb_suitability_ranges (parameter_id, min1, max1, min2, max2, interval_type1, interval_type2)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (parameter_id, min1, max1, min2, max2, interval_type1, interval_type2))
+            INSERT INTO kb_suitability_ranges (parameter_id, min1, max1, min2, max2)
+            VALUES (?, ?, ?, ?, ?)
+        """, (parameter_id, min1, max1, min2, max2))
         self.conn.commit()
 
     def delete_suitability_range(self, range_id: int):
@@ -1018,9 +1088,6 @@ class StateClinicalPictureDialog(QDialog):
 class NormalRangesDialog(QDialog):
     """Dialog for editing normal ranges (Нормальные значения)."""
 
-    INTERVAL_TYPES = ["[ ] закрытый", "[ ) полуоткрытый", "( ] полуоткрытый", "( ) открытый"]
-    INTERVAL_MAP = {"[ ]": "[]", "[ )": "[)", "( ]": "(]", "( )": "()"}
-
     def __init__(self, kb_db: KBDatabase, parent=None):
         super().__init__(parent)
         self.kb_db = kb_db
@@ -1034,13 +1101,12 @@ class NormalRangesDialog(QDialog):
 
         # Table
         self.table = QTableWidget()
-        self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(["Показатель", "Минимум", "Максимум", "Тип интервала", ""])
+        self.table.setColumnCount(3)
+        self.table.setHorizontalHeaderLabels(["Показатель", "Минимум", "Максимум"])
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         layout.addWidget(self.table)
 
         # Buttons
@@ -1065,7 +1131,7 @@ class NormalRangesDialog(QDialog):
         for row, p in enumerate(params):
             self.table.setItem(row, 0, QTableWidgetItem(p['name']))
 
-            r = ranges.get(p['name'], {'min_value': 0, 'max_value': 0, 'interval_type': '[)'})
+            r = ranges.get(p['name'], {'min_value': 0, 'max_value': 0})
 
             min_spin = QDoubleSpinBox()
             min_spin.setRange(-1000, 1000)
@@ -1079,47 +1145,27 @@ class NormalRangesDialog(QDialog):
             max_spin.setDecimals(2)
             self.table.setCellWidget(row, 2, max_spin)
 
-            interval_combo = QComboBox()
-            interval_combo.addItems(self.INTERVAL_TYPES)
-            # Find index by matching interval_type to INTERVAL_MAP values
-            current_interval = r['interval_type']
-            idx = 0
-            for i, (key, value) in enumerate(self.INTERVAL_MAP.items()):
-                if value == current_interval:
-                    idx = i
-                    break
-            interval_combo.setCurrentIndex(idx)
-            self.table.setCellWidget(row, 3, interval_combo)
-
     def save_ranges(self):
         params = self.kb_db.get_parameters()
 
         for row, p in enumerate(params):
             min_w = self.table.cellWidget(row, 1)
             max_w = self.table.cellWidget(row, 2)
-            interval_w = self.table.cellWidget(row, 3)
 
             min_val = min_w.value()
             max_val = max_w.value()
-
-            # Get interval type by matching selected index to INTERVAL_MAP
-            selected_index = interval_w.currentIndex()
-            interval_type = list(self.INTERVAL_MAP.values())[selected_index]
 
             if min_val >= max_val:
                 QMessageBox.warning(self, "Ошибка", f"Для {p['name']}: минимум должен быть меньше максимума")
                 return
 
-            self.kb_db.save_normal_range(p['id'], min_val, max_val, interval_type)
+            self.kb_db.save_normal_range(p['id'], min_val, max_val)
 
         QMessageBox.information(self, "Успех", "Нормальные значения сохранены")
 
 
 class SeverityMappingDialog(QDialog):
     """Dialog for editing severity mapping (Степень тяжести значений)."""
-
-    INTERVAL_TYPES = ["[ ] закрытый", "[ ) полуоткрытый", "( ] полуоткрытый", "( ) открытый"]
-    INTERVAL_MAP = {"[ ]": "[]", "[ )": "[)", "( ]": "(]", "( )": "()"}
 
     def __init__(self, kb_db: KBDatabase, parent=None):
         super().__init__(parent)
