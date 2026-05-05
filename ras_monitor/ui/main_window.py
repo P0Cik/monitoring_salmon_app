@@ -622,8 +622,12 @@ class MainWindow(QMainWindow):
         
         # Prepare data for plotting (last 50 measurements)
         params_data = {
-            'temp': [], 'ph': [], 'o2': [],
-            'ammonia': [], 'nitrite': [], 'salinity': []
+            'temp': [],
+            'ph': [], 
+            'o2': [],
+            'ammonia': [],
+            'nitrite': [],
+            'salinity': []
         }
         
         for m in self.measurements_history[-50:]:
@@ -724,8 +728,8 @@ class MainWindow(QMainWindow):
     
     def open_kb_editor(self):
         """Open Knowledge Base Editor window."""
-        from ui.kb_editor import KBEditorWindow
-        self.kb_editor = KBEditorWindow(self.db.db_path, self)
+        from ui.kb_editor import KBEditorMainWindow
+        self.kb_editor = KBEditorMainWindow(self.db.db_path, self)
         self.kb_editor.show()
     
     def open_report_dialog(self):

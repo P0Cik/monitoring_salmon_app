@@ -1,1 +1,2 @@
 Nothing should be ignored based on the provided changes. The only modified file is a Python source file (`ras_monitor/ui/kb_editor.py`), which should not be added to .gitignore.
+.docx
