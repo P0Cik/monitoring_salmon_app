@@ -4,16 +4,14 @@ Report export dialog for RAS monitoring system.
 Allows user to select date range and export data to CSV.
 """
 
-import sys
-from datetime import datetime, timedelta
-from typing import Optional
+from datetime import datetime
 
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLabel, QPushButton, QDateEdit, QComboBox, QMessageBox,
-    QFileDialog, QGroupBox
+    QGroupBox
 )
-from PyQt6.QtCore import Qt, QDate
+from PyQt6.QtCore import QDate
 from PyQt6.QtGui import QFont
 
 from core.report_export import ReportExporter

@@ -5,7 +5,7 @@ Strictly follows Algorithm 3.c.i from the report.
 """
 
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Optional
 
 
 @dataclass

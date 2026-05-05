@@ -6,17 +6,17 @@ Contains 10 editor dialogs for all KB terms.
 """
 
 import sys
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional
 from PyQt6.QtWidgets import (
     QMainWindow, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QLineEdit, QPushButton, QGroupBox, QTableWidget,
     QTableWidgetItem, QHeaderView, QScrollArea, QMessageBox,
-    QFormLayout, QSpinBox, QDoubleSpinBox, QComboBox, QTabWidget,
-    QWidget, QFileDialog, QApplication, QListWidget, QListWidgetItem,
-    QCheckBox, QToolButton, QTextEdit
+    QDoubleSpinBox, QComboBox,
+    QWidget, QApplication, QListWidget, QListWidgetItem,
+    QCheckBox, QToolButton
 )
-from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont, QIcon
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont
 
 import sqlite3
 import json
@@ -936,7 +936,7 @@ class ClinicalPictureDialog(QDialog):
         self.param_checks = {}
         for p in self.kb_db.get_parameters():
             cb = QCheckBox(p['name'])
-            cb.(p['id'])
+            cb.setProperty('param_id', p['id'])
             self.checks_layout.addWidget(cb)
             self.param_checks[p['id']] = cb
 

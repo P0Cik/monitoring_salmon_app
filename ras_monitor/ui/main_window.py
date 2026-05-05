@@ -5,7 +5,7 @@ Built with PyQt6, includes input form, charts, status cards, and history table.
 """
 
 import sys
-from datetime import datetime
+import os
 from typing import Optional, Dict, Any, List
 
 from PyQt6.QtWidgets import (
@@ -21,8 +21,9 @@ matplotlib.use('QtAgg')
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
-# Import application modules
-sys.path.insert(0, '..')
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from core.solver import Solver, MeasurementData, SolverResult
 from core.db import Database
 from ml.predictor import Predictor
@@ -162,10 +163,9 @@ class MainWindow(QMainWindow):
         self.setup_ui()
         self.load_history()
         
-        # Auto-refresh timer (optional)
+        # Auto-refresh timer
         self.refresh_timer = QTimer()
         self.refresh_timer.timeout.connect(self.refresh_chart)
-        # self.refresh_timer.start(30000)  # Refresh every 30 seconds
     
     def create_menu_bar(self):
         """Create menu bar with additional features."""
@@ -731,13 +731,13 @@ class MainWindow(QMainWindow):
         from ui.kb_editor import KBEditorMainWindow
         self.kb_editor = KBEditorMainWindow(self.db.db_path, self)
         self.kb_editor.show()
-    
+
     def open_report_dialog(self):
         """Open Report Export dialog."""
         from ui.report_dialog import ReportDialog
         dialog = ReportDialog(self.db.db_path, self)
         dialog.exec()
-    
+
     def generate_mock_data(self):
         """Generate mock test data."""
         from tools.generate_mock_data import MockDataGenerator
