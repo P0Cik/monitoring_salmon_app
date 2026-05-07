@@ -6,7 +6,7 @@ Contains 10 editor dialogs for all KB terms.
 """
 
 import sys
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Optional
 from PyQt6.QtWidgets import (
     QMainWindow, QDialog, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QLineEdit, QPushButton, QGroupBox, QTableWidget,
@@ -16,7 +16,6 @@ from PyQt6.QtWidgets import (
     QCheckBox, QToolButton
 )
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont
 
 import sqlite3
 import json
@@ -1442,7 +1441,7 @@ class SuitabilityValuesDialog(QDialog):
 
     def add_range(self):
         param_id = self.param_combo.currentData()
-        eval_id = self.eval_combo.currentData()
+        #eval_id = self.eval_combo.currentData()
         min1 = self.min1_spin.value()
         max1 = self.max1_spin.value()
 
