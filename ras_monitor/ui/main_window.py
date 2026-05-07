@@ -82,8 +82,9 @@ class MLForecastCard(QFrame):
         conf_layout = QHBoxLayout()
         conf_layout.setSpacing(4)
         conf_label = QLabel("Уверенность:")
-        conf_label.setStyleSheet("font-size: 8pt;")
-        conf_label.setWordWrap(True)
+        conf_label.setStyleSheet("font-size: 8pt; color: #AAAAAA;")
+        conf_label.setWordWrap(False)
+        conf_label.setMinimumWidth(80)
         conf_layout.addWidget(conf_label)
         self.confidence_bar = QProgressBar()
         self.confidence_bar.setRange(0, 100)
@@ -116,21 +117,28 @@ class MLForecastCard(QFrame):
         # Create progress bars for each state
         self.state_bars = {}
         state_names = {
-            1: "Отходящее от нормы",
+            1: "Отходящее",
             2: "Неустойчивое",
-            3: "Угроза биобаланса",
+            3: "Угроза",
             4: "Критическое"
         }
 
         for state_id, state_name in state_names.items():
             state_layout = QHBoxLayout()
-            state_layout.setSpacing(6)
+            state_layout.setSpacing(4)
 
             # State label with number and name
-            label = QLabel(f"{state_id}. {state_name}")
+            label = QLabel(f"{state_id}.")
             label.setStyleSheet("color: #AAAAAA; font-size: 8pt;")
-            label.setWordWrap(True)
-            state_layout.addWidget(label, 1)
+            label.setWordWrap(False)
+            label.setFixedWidth(15)
+            state_layout.addWidget(label)
+
+            name_label = QLabel(state_name)
+            name_label.setStyleSheet("color: #AAAAAA; font-size: 8pt;")
+            name_label.setWordWrap(False)
+            name_label.setMinimumWidth(80)
+            state_layout.addWidget(name_label)
 
             bar = QProgressBar()
             bar.setRange(0, 100)
@@ -270,10 +278,16 @@ class StatusCard(QFrame):
         
         self.setLayout(layout)
     
-    def update_value(self, value: str, color: Optional[str] = None) -> None:
-        """Update the card value and optionally color."""
+    def update_value(self, value: str, color: Optional[str] = None, tooltip: Optional[str] = None) -> None:
+        """Update the card value and optionally color and tooltip."""
         self.value = value
         self.value_label.setText(value)
+
+        # Set tooltip if provided
+        if tooltip:
+            self.setToolTip(tooltip)
+            self.value_label.setToolTip(tooltip)
+
         if color:
             self.color = color
             self.setStyleSheet(f"""
@@ -292,16 +306,16 @@ class StatusCard(QFrame):
 
 class MplCanvas(FigureCanvas):
     """Matplotlib canvas for embedding in PyQt6."""
-    
+
     def __init__(self, parent=None, width=5, height=4, dpi=100):
         self.fig = Figure(figsize=(width, height), dpi=dpi)
         self.axes = self.fig.add_subplot(111)
         super().__init__(self.fig)
         self.setParent(parent)
-        
+
         # Set minimum size
         self.setMinimumWidth(400)
-        self.setMinimumHeight(300)
+        self.setMinimumHeight(150)
 
 
 class MainWindow(QMainWindow):
@@ -589,7 +603,7 @@ class MainWindow(QMainWindow):
         # Create separate canvas for each parameter
         self.param_canvases = {}
         for param, config in self.param_configs.items():
-            canvas = MplCanvas(self, width=6, height=2, dpi=80)
+            canvas = MplCanvas(self, width=6, height=1.5, dpi=80)
             self.param_canvases[param] = canvas
             charts_layout.addWidget(canvas)
         
@@ -770,14 +784,18 @@ class MainWindow(QMainWindow):
         forecast_probs: Optional[Dict[int, float]] = None
     ) -> None:
         """Update the status cards with new data."""
-        # Current state
+        # Current state with tooltip
         state_desc = self.solver.get_state_description(result.current_state)
         state_color = self.STATE_COLORS.get(result.current_state, "#f0f0f0")
-        self.card_current_state.update_value(state_desc, state_color)
 
-        # Suitability
+        # Build state tooltip
+        state_tooltip = self._build_state_tooltip(result)
+        self.card_current_state.update_value(state_desc, state_color, state_tooltip)
+
+        # Suitability with tooltip
         suit_color = self.SUITABILITY_COLORS.get(result.suitability, "#f0f0f0")
-        self.card_suitability.update_value(result.suitability, suit_color)
+        suit_tooltip = self._build_suitability_tooltip(result)
+        self.card_suitability.update_value(result.suitability, suit_color, suit_tooltip)
 
         # Past dynamics
         dyn_color = self.DYNAMICS_COLORS.get(result.past_dynamics, "#f0f0f0")
@@ -792,6 +810,67 @@ class MainWindow(QMainWindow):
             )
         else:
             self.card_ml_forecast.clear_forecast()
+
+    def _build_state_tooltip(self, result: SolverResult) -> str:
+        """Build tooltip explaining why this state was determined."""
+        lines = [f"Состояние: {self.solver.get_state_description(result.current_state)}"]
+        lines.append("")
+        lines.append("Причины:")
+
+        param_names = {
+            'temp': 'Температура',
+            'ph': 'pH',
+            'o2': 'Кислород',
+            'ammonia': 'Аммиак',
+            'nitrite': 'Нитриты',
+            'salinity': 'Солёность'
+        }
+
+        # Show parameters that are out of normal range
+        abnormal_params = []
+        for param, severity in result.parameter_states.items():
+            if severity > 0:
+                abnormal_params.append(f"• {param_names.get(param, param)}: уровень тяжести {severity}")
+
+        if abnormal_params:
+            lines.extend(abnormal_params)
+        else:
+            lines.append("• Все параметры в норме")
+
+        return "\n".join(lines)
+
+    def _build_suitability_tooltip(self, result: SolverResult) -> str:
+        """Build tooltip explaining why this suitability was determined."""
+        lines = [f"Пригодность: {result.suitability}"]
+        lines.append("")
+
+        if result.suitability == "пригодна":
+            lines.append("Все параметры находятся в пределах нормы:")
+            lines.append("• Температура: [12.0; 14.0] °C")
+            lines.append("• pH: [7.4; 7.8]")
+            lines.append("• O₂: [90; 100] %")
+            lines.append("• Аммиак: [0; 0.5) мг/л")
+            lines.append("• Нитриты: [0; 0.1) мг/л")
+            lines.append("• Солёность: 0 ‰")
+        else:
+            lines.append("Один или несколько параметров вышли за пределы нормы.")
+            lines.append("")
+            lines.append("Параметры с отклонениями:")
+
+            param_names = {
+                'temp': 'Температура',
+                'ph': 'pH',
+                'o2': 'Кислород',
+                'ammonia': 'Аммиак',
+                'nitrite': 'Нитриты',
+                'salinity': 'Солёность'
+            }
+
+            for param, severity in result.parameter_states.items():
+                if severity > 0:
+                    lines.append(f"• {param_names.get(param, param)}: тяжесть {severity}")
+
+        return "\n".join(lines)
     
     def plot_data(self) -> None:
         """Plot measurement data on separate charts for each parameter."""

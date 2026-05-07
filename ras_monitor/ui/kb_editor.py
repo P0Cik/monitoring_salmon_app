@@ -1307,25 +1307,25 @@ class SuitabilityValuesDialog(QDialog):
         super().__init__(parent)
         self.kb_db = kb_db
         self.setWindowTitle("Значения для пригодности")
-        self.setMinimumWidth(600)
+        self.setMinimumWidth(700)
         self.setup_ui()
 
     def setup_ui(self):
         layout = QVBoxLayout()
 
-        # Parameter selector
-        param_layout = QHBoxLayout()
-        param_layout.addWidget(QLabel("Показатель:"))
-        self.param_combo = QComboBox()
-        self.param_combo.currentIndexChanged.connect(self.load_ranges)
-        param_layout.addWidget(self.param_combo)
-        param_layout.addStretch()
-        layout.addLayout(param_layout)
+        # Evaluation selector (filter)
+        eval_layout = QHBoxLayout()
+        eval_layout.addWidget(QLabel("Оценка:"))
+        self.eval_combo = QComboBox()
+        self.eval_combo.currentIndexChanged.connect(self.load_ranges)
+        eval_layout.addWidget(self.eval_combo)
+        eval_layout.addStretch()
+        layout.addLayout(eval_layout)
 
-        # Ranges table
+        # Table with parameters and their ranges
         self.table = QTableWidget()
         self.table.setColumnCount(4)
-        self.table.setHorizontalHeaderLabels(["Интервал значений", "Оценка", "", ""])
+        self.table.setHorizontalHeaderLabels(["Показатель", "Интервал значений", "", ""])
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
@@ -1335,25 +1335,25 @@ class SuitabilityValuesDialog(QDialog):
         form_group = QGroupBox("Добавить интервал:")
         form_layout = QGridLayout()
 
-        form_layout.addWidget(QLabel("Мин:"), 0, 0)
+        form_layout.addWidget(QLabel("Показатель:"), 0, 0)
+        self.param_combo = QComboBox()
+        for p in self.kb_db.get_parameters():
+            self.param_combo.addItem(p['name'], p['id'])
+        form_layout.addWidget(self.param_combo, 0, 1)
+
+        form_layout.addWidget(QLabel("Мин:"), 0, 2)
         self.min1_spin = QDoubleSpinBox()
         self.min1_spin.setRange(-1000, 1000)
         self.min1_spin.setValue(0.0)
         self.min1_spin.setDecimals(2)
-        form_layout.addWidget(self.min1_spin, 0, 1)
+        form_layout.addWidget(self.min1_spin, 0, 3)
 
-        form_layout.addWidget(QLabel("Макс:"), 0, 2)
+        form_layout.addWidget(QLabel("Макс:"), 0, 4)
         self.max1_spin = QDoubleSpinBox()
         self.max1_spin.setRange(-1000, 1000)
         self.max1_spin.setValue(0.0)
         self.max1_spin.setDecimals(2)
-        form_layout.addWidget(self.max1_spin, 0, 3)
-
-        form_layout.addWidget(QLabel("Оценка:"), 0, 4)
-        self.eval_combo = QComboBox()
-        for e in self.kb_db.get_evaluations():
-            self.eval_combo.addItem(e['name'], e['id'])
-        form_layout.addWidget(self.eval_combo, 0, 5)
+        form_layout.addWidget(self.max1_spin, 0, 5)
 
         self.add_btn = QPushButton("Добавить")
         self.add_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
@@ -1376,43 +1376,69 @@ class SuitabilityValuesDialog(QDialog):
         layout.addLayout(btn_layout)
 
         self.setLayout(layout)
-        self.load_parameters()
+        self.load_evaluations()
 
-    def load_parameters(self):
-        self.param_combo.clear()
-        for p in self.kb_db.get_parameters():
-            self.param_combo.addItem(p['name'], p['id'])
+    def load_evaluations(self):
+        self.eval_combo.clear()
+        for e in self.kb_db.get_evaluations():
+            self.eval_combo.addItem(e['name'], e['id'])
         self.load_ranges()
 
     def load_ranges(self):
         self.table.setRowCount(0)
-        param_id = self.param_combo.currentData()
-        if not param_id:
+        eval_id = self.eval_combo.currentData()
+        if not eval_id:
             return
 
-        ranges = self.kb_db.get_suitability_ranges(param_id)
-        evaluations = {e['id']: e['name'] for e in self.kb_db.get_evaluations()}
+        # Get all parameters
+        parameters = {p['id']: p['name'] for p in self.kb_db.get_parameters()}
 
+        # Get all suitability ranges
+        cursor = self.kb_db.conn.cursor()
+        cursor.execute("""
+            SELECT id, parameter_id, min1, max1, min2, max2
+            FROM kb_suitability_ranges
+            ORDER BY parameter_id
+        """)
+        ranges = cursor.fetchall()
+
+        # Group ranges by parameter
+        param_ranges = {}
         for r in ranges:
-            row = self.table.rowCount()
-            self.table.insertRow(row)
+            pid = r[1]
+            if pid not in param_ranges:
+                param_ranges[pid] = []
+            param_ranges[pid].append({
+                'id': r[0],
+                'min1': r[2],
+                'max1': r[3],
+                'min2': r[4],
+                'max2': r[5]
+            })
 
-            # Build interval string
-            interval_str = f"[{r['min1']:.1f}; {r['max1']:.1f})"
-            if r['min2'] is not None:
-                interval_str += f" ∪ [{r['min2']:.1f}; {r['max2']:.1f})"
+        # Display in table
+        for param_id, param_name in parameters.items():
+            if param_id in param_ranges:
+                for range_data in param_ranges[param_id]:
+                    row = self.table.rowCount()
+                    self.table.insertRow(row)
 
-            self.table.setItem(row, 0, QTableWidgetItem(interval_str))
+                    # Parameter name
+                    self.table.setItem(row, 0, QTableWidgetItem(param_name))
 
-            # Show evaluation (assuming we store eval_id in the future, for now show "непригодна")
-            self.table.setItem(row, 1, QTableWidgetItem("непригодна"))
+                    # Build interval string
+                    interval_str = f"[{range_data['min1']:.1f}; {range_data['max1']:.1f})"
+                    if range_data['min2'] is not None:
+                        interval_str += f" ∪ [{range_data['min2']:.1f}; {range_data['max2']:.1f})"
 
-            # Delete button
-            del_btn = QToolButton()
-            del_btn.setText("Удалить")
-            del_btn.setStyleSheet("color: red; border: none;")
-            del_btn.clicked.connect(lambda checked, rid=r['id']: self.delete_range(rid))
-            self.table.setCellWidget(row, 2, del_btn)
+                    self.table.setItem(row, 1, QTableWidgetItem(interval_str))
+
+                    # Delete button
+                    del_btn = QToolButton()
+                    del_btn.setText("Удалить")
+                    del_btn.setStyleSheet("color: red; border: none;")
+                    del_btn.clicked.connect(lambda checked, rid=range_data['id']: self.delete_range(rid))
+                    self.table.setCellWidget(row, 2, del_btn)
 
     def add_range(self):
         param_id = self.param_combo.currentData()
@@ -1606,8 +1632,7 @@ class KBEditorMainWindow(QMainWindow):
         "Нормальные значения",
         "Степень тяжести значений",
         "Значения для пригодности",
-        "Возможные значения",
-        "Порядок состояний"
+        "Возможные значения"
     ]
 
     def __init__(self, db_path: str = "ras_monitor.db", parent=None):
@@ -1659,11 +1684,11 @@ class KBEditorMainWindow(QMainWindow):
         self.completeness_btn.clicked.connect(self.check_completeness)
         btn_layout.addWidget(self.completeness_btn)
 
-        self.save_db_btn = QPushButton("Сохранить в БД")
+        self.save_db_btn = QPushButton("Сохранить в Базу знаний")
         self.save_db_btn.clicked.connect(self.save_to_db)
         btn_layout.addWidget(self.save_db_btn)
 
-        self.load_db_btn = QPushButton("Загрузить из БД")
+        self.load_db_btn = QPushButton("Загрузить из Базы знаний")
         self.load_db_btn.clicked.connect(self.load_from_db)
         btn_layout.addWidget(self.load_db_btn)
 
@@ -1697,7 +1722,6 @@ class KBEditorMainWindow(QMainWindow):
             "Степень тяжести значений": lambda: SeverityMappingDialog(self.kb_db, self).exec(),
             "Значения для пригодности": lambda: SuitabilityValuesDialog(self.kb_db, self).exec(),
             "Возможные значения": lambda: PossibleRangesDialog(self.kb_db, self).exec(),
-            "Порядок состояний": lambda: StateOrderDialog(self.kb_db, self).exec(),
         }
 
         if term_name in editors:
