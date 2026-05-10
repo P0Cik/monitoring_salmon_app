@@ -693,18 +693,39 @@ class MainWindow(QMainWindow):
     def get_input_values(self) -> Optional[MeasurementData]:
         """
         Get values from input fields.
-        
+
         Returns:
             MeasurementData if all fields are valid, None otherwise
         """
+        # Default values for empty fields (normal operating conditions)
+        defaults = {
+            'temp': 13.0,
+            'ph': 7.6,
+            'o2': 95.0,
+            'ammonia': 0.2,
+            'nitrite': 0.05,
+            'salinity': 0.0,
+        }
+
         try:
+            # Get values from fields, use defaults if empty
+            values = {}
+            for key in defaults.keys():
+                text = self.input_fields[key].text().strip().replace(',', '.')
+                if text == '':
+                    values[key] = defaults[key]
+                    # Update field with default value
+                    self.input_fields[key].setText(str(defaults[key]))
+                else:
+                    values[key] = float(text)
+
             return MeasurementData(
-                temp=float(self.input_fields['temp'].text().replace(',', '.')),
-                ph=float(self.input_fields['ph'].text().replace(',', '.')),
-                o2=float(self.input_fields['o2'].text().replace(',', '.')),
-                ammonia=float(self.input_fields['ammonia'].text().replace(',', '.')),
-                nitrite=float(self.input_fields['nitrite'].text().replace(',', '.')),
-                salinity=float(self.input_fields['salinity'].text().replace(',', '.')),
+                temp=values['temp'],
+                ph=values['ph'],
+                o2=values['o2'],
+                ammonia=values['ammonia'],
+                nitrite=values['nitrite'],
+                salinity=values['salinity'],
             )
         except ValueError as e:
             QMessageBox.warning(
